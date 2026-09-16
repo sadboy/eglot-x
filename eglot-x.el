@@ -832,22 +832,17 @@ it handles the SnippetTextEdit format."
            (done 0)
            snippet snippet-range)
       (mapc (pcase-lambda (`(,newText ,insertTextFormat (,beg . ,end)))
-              (let ((source (current-buffer)))
-                (with-temp-buffer
-                  (insert newText)
-                  (let ((temp (current-buffer)))
-                    (with-current-buffer source
-                      (save-excursion
-                        (save-restriction
-                          (narrow-to-region beg end)
-                            (replace-buffer-contents temp)))
-                      (when (eql insertTextFormat 2)
-			(setq snippet-range
-			      (eglot-x--unify-snippets
-			       snippet-range (list (point-min-marker)
-						   (point-max-marker)))))
-                      (when reporter
-                        (eglot--reporter-update reporter (cl-incf done))))))))
+              (save-excursion
+                (save-restriction
+                  (narrow-to-region beg end)
+                  (replace-region-contents (point-min) (point-max) newText)
+                  (when (eql insertTextFormat 2)
+                    (setq snippet-range
+                          (eglot-x--unify-snippets
+                           snippet-range (list (point-min-marker)
+                                               (point-max-marker)))))))
+              (when reporter
+                (eglot--reporter-update reporter (cl-incf done))))
             (mapcar (eglot--lambda ((SnippetTextEdit) range newText insertTextFormat)
                       (list newText insertTextFormat (eglot-range-region range 'markers)))
                     (reverse edits)))
@@ -1199,7 +1194,7 @@ CRATES should be nil, it is used internally."
 	 (completion-extra-properties
           '(:annotation-function
             (lambda (c)
-              (when-let ((desc (get-text-property 0 :annotation c)))
+              (when-let* ((desc (get-text-property 0 :annotation c)))
                 (concat " " desc))))))
      (list
       (completing-read
@@ -1777,7 +1772,7 @@ Adapted from `eglot--lsp-xref-helper'."
   (eglot--dbind ((Runnable) location)
       (xref-loc-runnable-runnable l)
     (eglot--dbind ((LocationLink) targetRange) location
-      (when-let ((line (plist-get (plist-get targetRange :start) :line)))
+      (when-let* ((line (plist-get (plist-get targetRange :start) :line)))
 	(1+ line)))))
 
 (cl-defmethod xref-location-marker ((l xref-loc-runnable))
@@ -1810,7 +1805,7 @@ Adapted from `eglot--lsp-xref-helper'."
 
 (defun eglot-x--runnable-dir (runnable)
   "Return working directory for RUNNABLE."
-  (eglot--dbind ((Runnable) label kind args)
+  (eglot--dbind ((Runnable) args)
       runnable
     (or (plist-get args :cwd)
         (plist-get args :workspaceRoot)
@@ -2024,7 +2019,7 @@ See `eglot-x-enable-colored-diagnostics'."
            (cl-loop
             for diag-spec across (plist-get args :diagnostics)
             collect
-            (if-let ((rendered (plist-get (plist-get diag-spec :data) :rendered)))
+            (if-let* ((rendered (plist-get (plist-get diag-spec :data) :rendered)))
                 (plist-put diag-spec :message
                            (eglot-x--ansi-color-apply rendered))
               diag-spec))))
@@ -2246,7 +2241,7 @@ It relys on a rust-analyzer LSP extension."
   "Execute rust-analyzer's runSingle client command."
   (apply #'eglot-x--goto-location server (plist-get args :location))
   (sit-for 0) ;; Give window/showDocument a chance to finish.  See bug #24.
-  (when-let ((default-directory (eglot-x--runnable-dir args))
+  (when-let* ((default-directory (eglot-x--runnable-dir args))
              (cmd (eglot-x--runnable-cmd args)))
     (compile cmd)))
 
@@ -2303,7 +2298,7 @@ Return (cons title plist)."
   (let* ((completion-extra-properties
           '(:annotation-function
             (lambda (c)
-              (when-let ((tooltip
+              (when-let* ((tooltip
                           (plist-get (cdr (assoc c eglot-x--completion-table))
                                      :tooltip)))
                 (format " %s" tooltip)))))
